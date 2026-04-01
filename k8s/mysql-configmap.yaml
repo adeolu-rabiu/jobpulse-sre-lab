@@ -1,0 +1,35 @@
+apiVersion: v1
+data:
+  schema.sql: |
+    USE jobpulse;
+
+    CREATE TABLE IF NOT EXISTS jobs (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      title VARCHAR(255) NOT NULL,
+      company VARCHAR(255) NOT NULL,
+      location VARCHAR(255),
+      salary_min INT,
+      salary_max INT,
+      description TEXT,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      INDEX idx_company (company),
+      INDEX idx_location (location)
+    );
+
+    CREATE TABLE IF NOT EXISTS applications (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      job_id INT NOT NULL,
+      candidate_email VARCHAR(255) NOT NULL,
+      applied_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (job_id) REFERENCES jobs(id),
+      INDEX idx_job_id (job_id)
+    );
+
+    INSERT INTO jobs (title, company, location, salary_min, salary_max, description) VALUES
+    ('Site Reliability Engineer', 'CV-Library', 'Fleet, Hampshire', 50000, 60000, 'SRE role focused on AWS, Kubernetes and observability'),
+    ('Platform Engineer', 'TechCorp UK', 'Manchester', 55000, 65000, 'Platform engineering with Terraform and Kubernetes'),
+    ('DevOps Engineer', 'FinanceHub', 'London', 60000, 75000, 'CI/CD and cloud infrastructure automation');
+kind: ConfigMap
+metadata:
+  name: mysql-schema
+  namespace: jobpulse
