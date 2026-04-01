@@ -1,0 +1,49 @@
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets:
+            - alertmanager:9093
+
+rule_files:
+  - alert_rules.yml
+
+scrape_configs:
+  - job_name: prometheus
+    static_configs:
+      - targets:
+          - localhost:9090
+
+  - job_name: jobpulse-api
+    static_configs:
+      - targets:
+          - 192.168.1.104:30500
+    metrics_path: /metrics
+
+  - job_name: node-exporter
+    static_configs:
+      - targets:
+          - 192.168.1.104:9100
+          - 192.168.1.113:9100
+          - 192.168.1.114:9100
+          - 192.168.1.115:9100
+    relabel_configs:
+      - source_labels: [__address__]
+        regex: '192.168.1.104:9100'
+        target_label: instance
+        replacement: jobpulse-k8s-master
+      - source_labels: [__address__]
+        regex: '192.168.1.113:9100'
+        target_label: instance
+        replacement: jobpulse-k8s-worker
+      - source_labels: [__address__]
+        regex: '192.168.1.114:9100'
+        target_label: instance
+        replacement: jobpulse-monitoring
+      - source_labels: [__address__]
+        regex: '192.168.1.115:9100'
+        target_label: instance
+        replacement: jobpulse-cicd
