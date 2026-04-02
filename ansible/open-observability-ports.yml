@@ -1,0 +1,73 @@
+---
+- name: Open required ports on all nodes
+  hosts: all_nodes
+  become: yes
+
+  tasks:
+    - name: Allow Node Exporter port on all nodes
+      ufw:
+        rule: allow
+        port: '9100'
+        proto: tcp
+
+- name: Open K3s cluster ports on master and worker
+  hosts: k8s_master,k8s_workers
+  become: yes
+
+  tasks:
+    - name: Allow K3s API server
+      ufw:
+        rule: allow
+        port: '6443'
+        proto: tcp
+
+    - name: Allow Kubelet API
+      ufw:
+        rule: allow
+        port: '10250'
+        proto: tcp
+
+    - name: Allow VXLAN overlay network
+      ufw:
+        rule: allow
+        port: '8472'
+        proto: udp
+
+    - name: Allow NodePort range
+      ufw:
+        rule: allow
+        port: '30000:32767'
+        proto: tcp
+
+- name: Open monitoring ports on monitoring node
+  hosts: monitoring
+  become: yes
+
+  tasks:
+    - name: Allow Prometheus
+      ufw:
+        rule: allow
+        port: '9090'
+        proto: tcp
+
+    - name: Allow Grafana
+      ufw:
+        rule: allow
+        port: '3000'
+        proto: tcp
+
+    - name: Allow Loki
+      ufw:
+        rule: allow
+        port: '3100'
+        proto: tcp
+
+    - name: Allow Alertmanager
+      ufw:
+        rule: allow
+        port: '9093'
+        proto: tcp
+
+    - name: Reload UFW
+      ufw:
+        state: reloaded
