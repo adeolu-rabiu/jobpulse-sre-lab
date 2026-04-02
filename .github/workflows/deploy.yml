@@ -53,16 +53,20 @@ jobs:
           docker build -t jobpulse-api:${{ github.sha }} ./app
           docker tag jobpulse-api:${{ github.sha }} jobpulse-api:latest
 
-      - name: Import image into K3s on master
+      - name: Save image as tar
         run: |
           docker save jobpulse-api:latest -o /tmp/jobpulse-api.tar
-          scp /tmp/jobpulse-api.tar agzo@192.168.1.104:/tmp/
-          ssh agzo@192.168.1.104 'sudo k3s ctr images import /tmp/jobpulse-api.tar && rm /tmp/jobpulse-api.tar'
+          chmod 644 /tmp/jobpulse-api.tar
+
+      - name: Import image into K3s on master
+        run: |
+          scp /tmp/jobpulse-api.tar agzo@192.168.1.104:/tmp/jobpulse-api.tar
+          ssh agzo@192.168.1.104 'k3s ctr images import /tmp/jobpulse-api.tar && rm /tmp/jobpulse-api.tar'
 
       - name: Import image into K3s on worker
         run: |
-          scp /tmp/jobpulse-api.tar agzo@192.168.1.113:/tmp/
-          ssh agzo@192.168.1.113 'sudo k3s ctr images import /tmp/jobpulse-api.tar && rm /tmp/jobpulse-api.tar'
+          scp /tmp/jobpulse-api.tar agzo@192.168.1.113:/tmp/jobpulse-api.tar
+          ssh agzo@192.168.1.113 'k3s ctr images import /tmp/jobpulse-api.tar && rm /tmp/jobpulse-api.tar'
 
       - name: Clean up local tar
         if: always()
@@ -77,11 +81,6 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Set up kubeconfig
-        run: |
-          mkdir -p ~/.kube
-          cp ~/.kube/config ~/.kube/config.bak || true
-
       - name: Apply Kubernetes manifests
         run: |
           kubectl apply -f k8s/namespace.yaml
@@ -94,23 +93,20 @@ jobs:
         run: |
           kubectl rollout restart deployment/jobpulse-api -n jobpulse
 
-      - name: Wait for rollout to complete
+      - name: Wait for rollout
         run: |
           kubectl rollout status deployment/jobpulse-api -n jobpulse --timeout=120s
 
       - name: Smoke test
         run: |
-          echo "Waiting 15 seconds for pods to stabilise..."
           sleep 15
           RESPONSE=$(curl -s -o /dev/null -w "%{http_code}" http://192.168.1.104:30500/health)
           if [ "$RESPONSE" != "200" ]; then
-            echo "Smoke test FAILED. HTTP response: $RESPONSE"
+            echo "Smoke test FAILED. HTTP $RESPONSE"
             kubectl rollout undo deployment/jobpulse-api -n jobpulse
             exit 1
           fi
-          echo "Smoke test PASSED. HTTP 200 received."
+          echo "Smoke test PASSED. HTTP 200"
 
-      - name: Verify pod status
-        run: |
-          kubectl get pods -n jobpulse
-          echo "Deployment complete"
+      - name: Verify pods
+        run: kubectl get pods -n jobpulse
