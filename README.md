@@ -309,3 +309,22 @@ Site Reliability Engineer | Cloud Infrastructure | DevOps
 
 MIT License. See LICENSE file for details.
 
+
+---
+
+## Platform Screenshots
+
+### Live Dashboard
+![JobPulse Dashboard](docs/screenshots/dashboard.jpg)
+
+### Job Listings
+![Job Listings](docs/screenshots/jobs-listing.jpg)
+
+### Grafana Observability
+![Grafana Dashboard](docs/screenshots/grafana.jpg)
+
+### Prometheus Targets
+![Prometheus Targets](docs/screenshots/prometheus-targets.jpg)
+
+### GitHub Actions CI/CD Pipeline
+![CI/CD Pipeline](docs/screenshots/cicd-pipeline.jpg)

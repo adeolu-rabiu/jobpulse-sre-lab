@@ -4,17 +4,11 @@ import mysql.connector
 import os
 import logging
 
-# Configure logging
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s %(levelname)s %(name)s %(message)s'
-)
+logging.basicConfig(level=logging.INFO, format='%(asctime)s %(levelname)s %(name)s %(message)s')
 logger = logging.getLogger(__name__)
 
-app = Flask(__name__)
+app = Flask(__name__, static_folder='static')
 metrics = PrometheusMetrics(app)
-
-# Static application info metric
 metrics.info('jobpulse_app_info', 'JobPulse API information', version='1.0.0')
 
 
@@ -27,15 +21,18 @@ def get_db():
     )
 
 
+@app.route('/')
+def index():
+    return app.send_static_file('index.html')
+
+
 @app.route('/health')
 def health():
     try:
         db = get_db()
         db.close()
-        logger.info('Health check passed')
         return jsonify({'status': 'ok', 'service': 'jobpulse-api', 'database': 'connected'}), 200
     except Exception as e:
-        logger.error(f'Health check failed: {e}')
         return jsonify({'status': 'error', 'message': str(e)}), 500
 
 
@@ -48,10 +45,8 @@ def list_jobs():
         jobs = cursor.fetchall()
         cursor.close()
         db.close()
-        logger.info(f'Listed {len(jobs)} jobs')
         return jsonify(jobs), 200
     except Exception as e:
-        logger.error(f'Failed to list jobs: {e}')
         return jsonify({'error': str(e)}), 500
 
 
@@ -72,10 +67,8 @@ def create_job():
         job_id = cursor.lastrowid
         cursor.close()
         db.close()
-        logger.info(f'Created job id={job_id} title={data["title"]}')
         return jsonify({'id': job_id, 'status': 'created'}), 201
     except Exception as e:
-        logger.error(f'Failed to create job: {e}')
         return jsonify({'error': str(e)}), 500
 
 
@@ -92,7 +85,6 @@ def get_job(job_id):
             return jsonify({'error': 'job not found'}), 404
         return jsonify(job), 200
     except Exception as e:
-        logger.error(f'Failed to get job {job_id}: {e}')
         return jsonify({'error': str(e)}), 500
 
 
@@ -112,10 +104,8 @@ def apply(job_id):
         app_id = cursor.lastrowid
         cursor.close()
         db.close()
-        logger.info(f'Application id={app_id} for job_id={job_id}')
         return jsonify({'id': app_id, 'status': 'applied'}), 201
     except Exception as e:
-        logger.error(f'Failed to apply for job {job_id}: {e}')
         return jsonify({'error': str(e)}), 500
 
 
@@ -135,7 +125,6 @@ def stats():
             'total_applications': apps['total_applications']
         }), 200
     except Exception as e:
-        logger.error(f'Failed to get stats: {e}')
         return jsonify({'error': str(e)}), 500
 
 
