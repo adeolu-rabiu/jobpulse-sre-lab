@@ -1,0 +1,116 @@
+name: JobPulse CI/CD Pipeline
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  test:
+    name: Run Unit Tests
+    runs-on: self-hosted
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        run: |
+          python3 -m venv venv
+          source venv/bin/activate
+          pip install --upgrade pip
+
+      - name: Install dependencies
+        run: |
+          source venv/bin/activate
+          cd app
+          pip install -r requirements.txt
+          pip install pytest
+
+      - name: Run tests
+        run: |
+          source venv/bin/activate
+          cd app
+          pytest tests/ -v --tb=short
+
+      - name: Clean up venv
+        if: always()
+        run: rm -rf venv
+
+  build:
+    name: Build Docker Image
+    runs-on: self-hosted
+    needs: test
+    if: github.ref == 'refs/heads/main'
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Build Docker image
+        run: |
+          docker build -t jobpulse-api:${{ github.sha }} ./app
+          docker tag jobpulse-api:${{ github.sha }} jobpulse-api:latest
+
+      - name: Import image into K3s on master
+        run: |
+          docker save jobpulse-api:latest -o /tmp/jobpulse-api.tar
+          scp /tmp/jobpulse-api.tar agzo@192.168.1.104:/tmp/
+          ssh agzo@192.168.1.104 'sudo k3s ctr images import /tmp/jobpulse-api.tar && rm /tmp/jobpulse-api.tar'
+
+      - name: Import image into K3s on worker
+        run: |
+          scp /tmp/jobpulse-api.tar agzo@192.168.1.113:/tmp/
+          ssh agzo@192.168.1.113 'sudo k3s ctr images import /tmp/jobpulse-api.tar && rm /tmp/jobpulse-api.tar'
+
+      - name: Clean up local tar
+        if: always()
+        run: rm -f /tmp/jobpulse-api.tar
+
+  deploy:
+    name: Deploy to Kubernetes
+    runs-on: self-hosted
+    needs: build
+    if: github.ref == 'refs/heads/main'
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up kubeconfig
+        run: |
+          mkdir -p ~/.kube
+          cp ~/.kube/config ~/.kube/config.bak || true
+
+      - name: Apply Kubernetes manifests
+        run: |
+          kubectl apply -f k8s/namespace.yaml
+          kubectl apply -f k8s/secret.yaml
+          kubectl apply -f k8s/mysql-configmap.yaml
+          kubectl apply -f k8s/mysql-deployment.yaml
+          kubectl apply -f k8s/api-deployment.yaml
+
+      - name: Restart API deployment
+        run: |
+          kubectl rollout restart deployment/jobpulse-api -n jobpulse
+
+      - name: Wait for rollout to complete
+        run: |
+          kubectl rollout status deployment/jobpulse-api -n jobpulse --timeout=120s
+
+      - name: Smoke test
+        run: |
+          echo "Waiting 15 seconds for pods to stabilise..."
+          sleep 15
+          RESPONSE=$(curl -s -o /dev/null -w "%{http_code}" http://192.168.1.104:30500/health)
+          if [ "$RESPONSE" != "200" ]; then
+            echo "Smoke test FAILED. HTTP response: $RESPONSE"
+            kubectl rollout undo deployment/jobpulse-api -n jobpulse
+            exit 1
+          fi
+          echo "Smoke test PASSED. HTTP 200 received."
+
+      - name: Verify pod status
+        run: |
+          kubectl get pods -n jobpulse
+          echo "Deployment complete"
